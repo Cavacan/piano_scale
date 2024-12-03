@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>スケール練習アプリ</title>
+    <style>
+        canvas { border: 1px solid black; margin-top: 10px; }
+        button { margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>スケール練習アプリ</h1>
+    <div>
+        <button onclick="setScale('C_Major')">C Major</button>
+        <button onclick="setScale('G_Major')">G Major</button>
+        <button onclick="setScale('A_Minor')">A Minor</button>
+    </div>
+    <canvas id="piano" width="600" height="200"></canvas>
+    <script>
+        const canvas = document.getElementById('piano');
+        const ctx = canvas.getContext('2d');
+
+        // 鍵盤情報
+        const whiteKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+        const blackKeys = ['C#', 'D#', null, 'F#', 'G#', 'A#', null];
+        const keyWidth = 50; // 白鍵の幅
+        const whiteKeyHeight = 200;
+        const blackKeyWidth = 30; // 黒鍵の幅
+        const blackKeyHeight = 120;
+
+        // MIDI範囲（C3-C4: 48-60）
+        const midiToNote = {
+            48: 'C3', 49: 'C#3', 50: 'D3', 51: 'D#3', 52: 'E3',
+            53: 'F3', 54: 'F#3', 55: 'G3', 56: 'G#3', 57: 'A3',
+            58: 'A#3', 59: 'B3', 60: 'C4'
+        };
+
+        // スケール定義
+        const scales = {
+            C_Major: ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4'],
+            G_Major: ['G3', 'A3', 'B3', 'C4', 'D3', 'E3', 'F#3', 'G4'],
+            A_Minor: ['A3', 'B3', 'C4', 'D3', 'E3', 'F3', 'G3', 'A4']
+        };
+
+        let currentScale = [];
+        const keys = []; // 鍵盤状態管理
+
+        // 鍵盤初期化
+        function initializeKeys() {
+            keys.length = 0;
+            let whiteIndex = 0;
+            for (let i = 48; i <= 60; i++) {
+                const note = midiToNote[i];
+                const isBlack = note.includes('#');
+                const x = isBlack
+                    ? whiteIndex * keyWidth - blackKeyWidth / 2
+                    : whiteIndex++ * keyWidth;
+
+                keys.push({
+                    note,
+                    x,
+                    width: isBlack ? blackKeyWidth : keyWidth,
+                    height: isBlack ? blackKeyHeight : whiteKeyHeight,
+                    color: isBlack ? 'black' : 'white',
+                    isBlack
+                });
+            }
+        }
+
+        // 鍵盤描画
+        function drawPiano() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 白鍵を先に描画
+            keys.filter(k => !k.isBlack).forEach(key => {
+                ctx.fillStyle = key.color;
+                ctx.fillRect(key.x, 0, key.width, key.height);
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect(key.x, 0, key.width, key.height);
+            });
+
+            // 黒鍵を上に重ねて描画
+            keys.filter(k => k.isBlack).forEach(key => {
+                ctx.fillStyle = key.color;
+                ctx.fillRect(key.x, 0, key.width, key.height);
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect(key.x, 0, key.width, key.height);
+            });
+        }
+
+        // スケール設定
+        function setScale(scaleName) {
+            currentScale = scales[scaleName] || [];
+            keys.forEach(key => {
+                key.color = key.isBlack ? 'black' : 'white'; // 全てリセット
+                if (currentScale.includes(key.note)) {
+                    key.color = 'yellow';
+                }
+            });
+            drawPiano();
+        }
+
+        // MIDI信号を処理
+        navigator.requestMIDIAccess().then(midiAccess => {
+            const inputs = midiAccess.inputs.values();
+            for (const input of inputs) {
+                input.onmidimessage = msg => {
+                    const [status, note, velocity] = msg.data;
+                    const key = keys.find(k => k.note === midiToNote[note]);
+                    if (!key) return;
+
+                    if (status === 144 && velocity > 0) { // Note On
+                        key.color = currentScale.includes(key.note) ? 'lightgreen' : 'lightpink';
+                    } else if (status === 128 || (status === 144 && velocity === 0)) { // Note Off
+                        key.color = currentScale.includes(key.note)
+                            ? 'yellow'
+                            : key.isBlack
+                                ? 'black'
+                                : 'white';
+                    }
+                    drawPiano();
+                };
+            }
+        });
+
+        // 初期化
+        initializeKeys();
+        drawPiano();
+    </script>
+</body>
+</html>
